@@ -17,7 +17,7 @@ class StandingEnv:
         self.device = gs.device
 
         self.simulate_action_latency = env_cfg.get("simulate_action_latency", False)
-        self.dt = 0.01 # 100 Hz
+        self.dt = 0.002 # 100 Hz
         self.max_episode_length = math.ceil(env_cfg["episode_length_s"] / self.dt)
 
         self.env_cfg = env_cfg
@@ -120,7 +120,9 @@ class StandingEnv:
         self.base_ang_vel = torch.zeros((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
         self.last_base_ang_vel = torch.zeros((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
         self.base_ang_accel = torch.zeros((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
-
+        # self.base_lin_vel = torch.zeros((self.num_envs, 3), dtype=gs.tc_float, device=gs.device)
+        self.steering_pos = torch.zeros((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
+        self.drive_vel = torch.zeros((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
         self.extras = dict()  
         self.extras["observations"] = dict()
 
@@ -156,6 +158,11 @@ class StandingEnv:
         self.base_ang_accel = (current_ang_vel - self.last_base_ang_vel) / self.dt
         self.base_ang_vel = current_ang_vel
         self.last_base_ang_vel.copy_(current_ang_vel)
+
+        # ローカル座標系（バイクから見た方向）での前進速度などを取得
+        # self.base_lin_vel = transform_by_quat(self.robot.get_vel(), inv_base_quat)
+        self.steering_pos = self.robot.get_dofs_position(self.steering_dof_idx)
+        self.drive_vel = self.robot.get_dofs_velocity(self.drive_dof_idx)
 
         # 3. Compute Rewards
         self.rew_buf.zero_() 
@@ -197,6 +204,9 @@ class StandingEnv:
             self.actions.zero_()
             self.episode_length_buf.zero_()
             self.reset_buf.fill_(True)
+            # self.base_lin_vel.zero_()
+            self.steering_pos.zero_()
+            self.drive_vel.zero_()
         else:
             self.base_euler.masked_fill_(envs_idx[:, None], 0.0) # ← 追加
             self.base_ang_vel.masked_fill_(envs_idx[:, None], 0.0)
@@ -204,6 +214,9 @@ class StandingEnv:
             self.actions.masked_fill_(envs_idx[:, None], 0.0)
             self.episode_length_buf.masked_fill_(envs_idx, 0)
             self.reset_buf.masked_fill_(envs_idx, True)
+            # self.base_lin_vel.masked_fill_(envs_idx[:, None], 0.0)
+            self.steering_pos.masked_fill_(envs_idx[:, None], 0.0)
+            self.drive_vel.masked_fill_(envs_idx[:, None], 0.0)
 
         n_envs = envs_idx.sum() if envs_idx is not None else self.num_envs
         self.extras["episode"] = {}
@@ -223,6 +236,10 @@ class StandingEnv:
                 self.base_euler[:, 0:1] * self.obs_scales["roll"], 
                 self.base_ang_vel[:, 0:1] * self.obs_scales["ang_vel"], 
                 self.base_ang_accel[:, 0:1] * self.obs_scales["ang_acc"],
+                # self.base_lin_vel[:, 0:1], # インデックス0がX方向(前進)の速度
+                self.steering_pos,         # ステアリングの現在の角度
+                self.drive_vel,            # 後輪の回転速度
+                self.actions               # 前回AIが出力したアクション（ステアリング指令値, トルク指令値）
             ),
             dim=-1,
         )
@@ -245,6 +262,6 @@ class StandingEnv:
         # reward -= 0.09 * abs(angular_vel)
         return torch.abs(self.base_ang_vel[:, 0])
 
-    # def _reward_survival_bonus(self):
-    #     # return self.step_count / 100.0 (Translated to a steady positive stream in PPO)
-    #     return self.episode_length_buf / 100.0
+    def _reward_survival_bonus(self):
+        # return self.step_count / 100.0 (Translated to a steady positive stream in PPO)
+        return self.episode_length_buf / 100.0

@@ -53,7 +53,7 @@ class PythonConfig:
             # Update this to match the specific joint name in your Genesis URDF/XML
             "joint_names": ["tire_holder_yaw", "tire_back_pitch"], 
             "default_joint_angles": {  
-                "tire_holder_yaw": math.radians(0),
+                "tire_holder_yaw": math.radians(-60),
                 "tire_back_pitch": 0.0,
             },
             
@@ -75,18 +75,18 @@ class PythonConfig:
             "base_init_quat": [1.0, 0.0, 0.0, 0.0],
             "initial_tilt_deg": math.radians(4), # The 3.7 degree initialization from MuJoCo code
             
-            "episode_length_s": 20.0, 
+            "episode_length_s": 40.0, 
             "resampling_time_s": 4.0, 
 
             # Action scale (ネットワーク出力 [-1, 1] をそれぞれの物理量に変換)
-            "steering_angle_scale": math.radians(80), # Action 0 のスケール（角度）
+            "steering_angle_scale": math.radians(60), # Action 0 のスケール（角度）
             "drive_torque_scale": 0.021,              # Action 1 のスケール（トルク）            
             "simulate_action_latency": False, # Turned off for simpler dynamics matching MuJoCo
             "clip_actions": 1.0, 
         }
         
         obs_cfg = {
-            "num_obs": 3, # Roll angle (rad), Angular Velocity (rad/s), Angular Acceleration (rad/s^2)
+            "num_obs": 7, # Roll angle (rad), Angular Velocity (rad/s), Angular Acceleration (rad/s^2)
             "obs_scales": {
                 "roll": 1.0,
                 "ang_vel": 1.0,
@@ -97,8 +97,8 @@ class PythonConfig:
         reward_cfg = {
             "reward_scales": {
                 "upright_posture": 5.0,     # Matches: 3*(45deg - abs(imu))/45deg
-                "angular_vel_penalty": -20, # Matches: -0.09 * abs(angular_vel)
-                # "survival_bonus": 1.0,      # Matches the step_count / 100.0 logic in MuJoCo
+                "angular_vel_penalty": -0, # Matches: -0.09 * abs(angular_vel)
+                "survival_bonus": 2.0,      # Matches the step_count / 100.0 logic in MuJoCo
             },
         }
         
