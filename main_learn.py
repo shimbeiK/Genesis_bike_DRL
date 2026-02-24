@@ -22,7 +22,7 @@ except (metadata.PackageNotFoundError, ImportError) as e:
 from rsl_rl.runners import OnPolicyRunner # type: ignore
 
 num_envs = 4096
-num_iterations = 2501
+num_iterations = 4001
 # --- メイン処理 ---
 def main():
     parser = argparse.ArgumentParser() # 引数解析器の初期化

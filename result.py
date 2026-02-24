@@ -20,11 +20,12 @@ import genesis as gs
 
 from bike_env import StandingEnv
 
+file_num = 2200
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--exp_name", type=str, default="bike-standing")
-    parser.add_argument("--ckpt", type=int, default=1500)
+    parser.add_argument("--ckpt", type=int, default=file_num)
     args = parser.parse_args()
 
     gs.init(backend=gs.cpu)

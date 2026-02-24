@@ -17,13 +17,15 @@ class StandingEnv:
         self.device = gs.device
 
         self.simulate_action_latency = env_cfg.get("simulate_action_latency", False)
-        self.dt = 0.002 # 100 Hz
+        self.dt = env_cfg["dt"] # 100 Hz
         self.max_episode_length = math.ceil(env_cfg["episode_length_s"] / self.dt)
 
         self.env_cfg = env_cfg
         self.obs_cfg = obs_cfg
         self.reward_cfg = reward_cfg
         self.command_cfg = command_cfg
+        self.last_steering_pos = torch.zeros((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
+        self.last_drive_torque = torch.zeros((self.num_envs, 1), dtype=gs.tc_float, device=gs.device)
 
         self.obs_scales = obs_cfg["obs_scales"]
         self.reward_scales = reward_cfg["reward_scales"]
@@ -127,21 +129,23 @@ class StandingEnv:
         self.extras["observations"] = dict()
 
         self.reward_functions, self.episode_sums = dict(), dict()
+        self.reward_scales = dict(reward_cfg["reward_scales"])
         for name in self.reward_scales.keys():
             self.reward_scales[name] *= self.dt 
             self.reward_functions[name] = getattr(self, "_reward_" + name)
             self.episode_sums[name] = torch.zeros((self.num_envs,), dtype=gs.tc_float, device=gs.device)
 
     def step(self, actions):
+        # print("Angular Velocity (X-axis) for reward:", torch.abs(self.base_ang_vel[:, 0]))
         self.actions = torch.clip(actions, -self.env_cfg["clip_actions"], self.env_cfg["clip_actions"])
         
         # Action 0: 前輪のステアリング（位置制御）
-        steering_target = self.actions[:, 0:1] * self.env_cfg["steering_angle_scale"]
-        self.robot.control_dofs_position(steering_target, self.steering_dof_idx)
+        self.steering_target = self.actions[:, 0:1] * self.env_cfg["steering_angle_scale"]
+        self.robot.control_dofs_position(self.steering_target, self.steering_dof_idx)
         
         # Action 1: 後輪の駆動（トルク制御）
-        drive_torque = self.actions[:, 1:2] * self.env_cfg["drive_torque_scale"]
-        self.robot.control_dofs_force(drive_torque, self.drive_dof_idx)
+        self.drive_torque = self.actions[:, 1:2] * self.env_cfg["drive_torque_scale"]
+        self.robot.control_dofs_force(self.drive_torque, self.drive_dof_idx)
         
         self.scene.step()
 
@@ -175,7 +179,10 @@ class StandingEnv:
         self.reset_buf = self.episode_length_buf > self.max_episode_length
         # Checking Roll (X-axis) 
         self.reset_buf |= torch.abs(self.base_euler[:, 0]) > self.env_cfg["termination_if_roll_greater_than"]
-
+        # 現在のロボットのベース位置を取得 (形状: [num_envs, 3])
+        base_pos = self.robot.get_pos()
+        self.reset_buf |= torch.abs(base_pos[:, 0] - self.init_base_pos[0]) > self.env_cfg["termination_if_posX_greater_than"]
+        self.reset_buf |= torch.abs(base_pos[:, 1] - self.init_base_pos[1]) > self.env_cfg["termination_if_posY_greater_than"]
         self.extras["time_outs"] = (self.episode_length_buf > self.max_episode_length).to(dtype=gs.tc_float)
 
         self._reset_idx(self.reset_buf)
@@ -207,6 +214,8 @@ class StandingEnv:
             # self.base_lin_vel.zero_()
             self.steering_pos.zero_()
             self.drive_vel.zero_()
+            self.last_steering_pos.zero_()
+            self.last_drive_torque.zero_()
         else:
             self.base_euler.masked_fill_(envs_idx[:, None], 0.0) # ← 追加
             self.base_ang_vel.masked_fill_(envs_idx[:, None], 0.0)
@@ -217,6 +226,8 @@ class StandingEnv:
             # self.base_lin_vel.masked_fill_(envs_idx[:, None], 0.0)
             self.steering_pos.masked_fill_(envs_idx[:, None], 0.0)
             self.drive_vel.masked_fill_(envs_idx[:, None], 0.0)
+            self.last_drive_torque.masked_fill_(envs_idx[:, None], 0.0)
+            self.last_steering_pos.masked_fill_(envs_idx[:, None], 0.0)
 
         n_envs = envs_idx.sum() if envs_idx is not None else self.num_envs
         self.extras["episode"] = {}
@@ -259,9 +270,18 @@ class StandingEnv:
         return (target_rad - roll) / target_rad
 
     def _reward_angular_vel_penalty(self):
-        # reward -= 0.09 * abs(angular_vel)
-        return torch.abs(self.base_ang_vel[:, 0])
+        return torch.minimum(torch.abs(self.base_ang_vel[:, 0]) / 5.0, 
+                             torch.tensor(1.0, device=self.base_ang_vel.device))
+    
+    def _reward_torque_change_penalty(self):
+        reward =  abs(self.drive_torque - self.last_drive_torque) / 2
+        self.last_drive_torque = self.drive_torque
+        return reward.squeeze(-1)
+    
+    def _reward_steering_change_penalty(self):
+        reward =  abs(self.steering_pos - self.last_steering_pos) / 2
+        self.last_steering_pos = self.steering_pos
+        return reward.squeeze(-1)
 
     def _reward_survival_bonus(self):
-        # return self.step_count / 100.0 (Translated to a steady positive stream in PPO)
-        return self.episode_length_buf / 100.0
+        return 1

@@ -11,21 +11,21 @@ class PythonConfig:
                 "entropy_coef": 0.01,
                 "gamma": 0.99,
                 "lam": 0.95,
-                "learning_rate": 0.001, # Can be tweaked to match parameters_ppo.json
-                "max_grad_norm": 1.0,
-                "num_learning_epochs": 5,
+                "learning_rate": 0.0003, # Can be tweaked to match parameters_ppo.json
+                "max_grad_norm": 0.5,
+                "num_learning_epochs": 10,
                 "num_mini_batches": 4,
                 "schedule": "adaptive",
                 "use_clipped_value_loss": True,
-                "value_loss_coef": 1.0,
+                # "value_loss_coef": 1.0,
             },
             "init_member_classes": {},
             "policy": {
                 "class_name": "ActorCritic",
                 "activation": "elu",
-                "actor_hidden_dims": [256, 128, 64], # Slightly smaller for simpler 3D observation
-                "critic_hidden_dims": [256, 128, 64],
-                "init_noise_std": 1.0,
+                "actor_hidden_dims": [128, 64], # Slightly smaller for simpler 3D observation
+                "critic_hidden_dims": [128, 64],
+                "init_noise_std": 0.5,
             },
             "runner": {
                 "checkpoint": -1,
@@ -54,7 +54,7 @@ class PythonConfig:
             "joint_names": ["tire_holder_yaw", "tire_back_pitch"], 
             "default_joint_angles": {  
                 "tire_holder_yaw": math.radians(-60),
-                "tire_back_pitch": 0.0,
+                "tire_back_pitch": -0.00,
             },
             
             # 前輪（ステアリング）用の位置制御ゲイン
@@ -67,15 +67,18 @@ class PythonConfig:
             "drive_kd": 0.0,  
             
             # Termination bounds (converted np.pi/6 to approx 30 degrees)
-            "termination_if_roll_greater_than": math.radians(30.0),
-            # "termination_if_pitch_greater_than": 180.0, # Ignored for balancing task
+            "termination_if_roll_greater_than": math.radians(45.0),
+            "termination_if_posX_greater_than": 0.5, # meters
+            "termination_if_posY_greater_than": 0.5, # meters
+            # "termination_if_step_count_greater_than": 300, # steps
             
             # Initial Base state
             "base_init_pos": [0.0, 0.0, 0.03], # Adjust height based on your bike model
             "base_init_quat": [1.0, 0.0, 0.0, 0.0],
             "initial_tilt_deg": math.radians(4), # The 3.7 degree initialization from MuJoCo code
             
-            "episode_length_s": 40.0, 
+            "episode_length_s": 10.0, 
+            "dt": 0.002, # 100 Hz
             "resampling_time_s": 4.0, 
 
             # Action scale (ネットワーク出力 [-1, 1] をそれぞれの物理量に変換)
@@ -96,9 +99,12 @@ class PythonConfig:
         
         reward_cfg = {
             "reward_scales": {
-                "upright_posture": 5.0,     # Matches: 3*(45deg - abs(imu))/45deg
-                "angular_vel_penalty": -0, # Matches: -0.09 * abs(angular_vel)
-                "survival_bonus": 2.0,      # Matches the step_count / 100.0 logic in MuJoCo
+            "survival_bonus": 0.0,      # base reward
+            "upright_posture": 10.0,     # Matches: * 1
+            "angular_vel_penalty": 3.0, # Matches: * 1
+            # "pos_penalty": 1.0,           # Matches:  * 1
+            "steering_change_penalty": - 1, # Matches:  * 1
+            "torque_change_penalty": - 0,   # Matches: * 1
             },
         }
         
