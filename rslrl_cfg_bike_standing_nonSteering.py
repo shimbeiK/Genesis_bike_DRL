@@ -6,10 +6,10 @@ class PythonConfig:
         train_cfg_dict = {
             "algorithm": {
                 "class_name": "PPO",
-                "clip_param": 0.2,
+                "clip_param": 0.3,
                 "desired_kl": 0.01,
                 "entropy_coef": 0.01,
-                "gamma": 0.99,
+                "gamma": 0.995,
                 "lam": 0.95,
                 "learning_rate": 0.0003, # Can be tweaked to match parameters_ppo.json
                 "max_grad_norm": 0.5,
@@ -48,13 +48,13 @@ class PythonConfig:
     
     def get_cfgs():
         env_cfg = {
-            "num_actions": 2, # Only 1 action: Torque applied to the balancing wheel
+            "num_actions": 1, # Only 1 action: Torque applied to the balancing wheel
             
             # Update this to match the specific joint name in your Genesis URDF/XML
             "joint_names": ["tire_holder_yaw", "tire_back_pitch"], 
             "default_joint_angles": {  
                 "tire_holder_yaw": math.radians(-60),
-                "tire_back_pitch": 0,
+                "tire_back_pitch": -0.0,  # [-1, 1]
             },
             
             # 前輪（ステアリング）用の位置制御ゲイン
@@ -68,28 +68,28 @@ class PythonConfig:
             
             # Termination bounds (converted np.pi/6 to approx 30 degrees)
             "termination_if_roll_greater_than": math.radians(45.0),
-            "termination_if_posX_greater_than": 0.5, # meters
-            "termination_if_posY_greater_than": 0.5, # meters
+            # "termination_if_posX_greater_than": 10.5, # meters
+            # "termination_if_posY_greater_than": 10.5, # meters
+            # "termination_if_odometry_greater_than": 50.0,  # meters (to catch flips)
             # "termination_if_step_count_greater_than": 300, # steps
             
             # Initial Base state
             "base_init_pos": [0.0, 0.0, 0.03], # Adjust height based on your bike model
             "base_init_quat": [1.0, 0.0, 0.0, 0.0],
-            "initial_tilt_deg": math.radians(4), # The 3.7 degree initialization from MuJoCo code
+            "initial_tilt_deg": math.radians(-1), # The 3.7 degree initialization from MuJoCo code
             
             "episode_length_s": 10.0, 
             "dt": 0.01, # 100 Hz
             "resampling_time_s": 4.0, 
 
             # Action scale (ネットワーク出力 [-1, 1] をそれぞれの物理量に変換)
-            "steering_angle_scale": math.radians(60), # Action 0 のスケール（角度）
             "drive_torque_scale": 0.05,              # Action 1 のスケール（トルク）            
             "simulate_action_latency": False, # Turned off for simpler dynamics matching MuJoCo
             "clip_actions": 1.0, 
         }
         
         obs_cfg = {
-            "num_obs": 7, # Roll angle (rad), Angular Velocity (rad/s), Angular Acceleration (rad/s^2)
+            "num_obs": 5, # Roll angle (rad), Angular Velocity (rad/s), Angular Acceleration (rad/s^2)
             "obs_scales": {
                 "roll": 1.0,
                 "ang_vel": 1.0,
@@ -99,12 +99,12 @@ class PythonConfig:
         
         reward_cfg = {
             "reward_scales": {
-            "survival_bonus": 5.0,      # base reward
-            "upright_posture": 5.0,     # Matches: * 1
+            "survival_bonus": 1.0,      # base reward
+            "upright_posture": 1.0,     # Matches: * 1
             "angular_vel_penalty": 0.0, # Matches: * 1
-            # "pos_penalty": 1.0,           # Matches:  * 1
-            "steering_change_penalty": - 10.0, # Matches:  * 1
             "torque_change_penalty": - 0,   # Matches: * 1
+            # "torque_change_penalty": - 0,   # Matches: * 1
+            "odometry_penalty": 3,        # Matches: * 1
             },
         }
         

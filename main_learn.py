@@ -3,9 +3,12 @@ import os
 import pickle 
 import shutil    
 from importlib import metadata 
-from rslrl_cfg_bike_standing import PythonConfig  
+from rslrl_cfg_bike_standing_nonSteering import PythonConfig  
+# from rslrl_cfg_bike_standing import PythonConfig  
 import genesis as gs 
-from bike_env import StandingEnv 
+# from bike_env_NonSteer import StandingEnv 
+from bike_env_NonSteer_withGemini import StandingEnv 
+# from bike_env import StandingEnv 
 # --- rsl_rlパッケージの厳密なバージョンチェック ---
 # Genesisは純正のrsl-rlではなく、軽量化されたフォーク版(rsl-rl-lib 2.2.4)を要求するため、ここでチェックを行う
 try:
@@ -22,7 +25,8 @@ except (metadata.PackageNotFoundError, ImportError) as e:
 from rsl_rl.runners import OnPolicyRunner # type: ignore
 
 num_envs = 4096
-num_iterations = 4001
+num_iterations = 3001
+rendering_mode = False  # 学習中はヘッドレスモードで動かす（ウィンドウを表示しない）
 # --- メイン処理 ---
 def main():
     parser = argparse.ArgumentParser() # 引数解析器の初期化
@@ -73,7 +77,7 @@ def main():
         obs_cfg=obs_cfg,            # 観測（状態）の設定を渡す
         reward_cfg=reward_cfg,      # 報酬関数の重みなどの設定を渡す
         command_cfg=command_cfg,     # 目標値（速度など）の設定を渡す
-        show_viewer=False,  # 学習中はヘッドレスモードで動かす（ウィンドウを表示しない）
+        show_viewer=rendering_mode,  # 学習中はヘッドレスモードで動かす（ウィンドウを表示しない）
     )
 
     # 7. rsl_rlランナーの初期化と学習の開始

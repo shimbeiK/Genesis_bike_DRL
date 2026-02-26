@@ -1,5 +1,5 @@
 import argparse
-import os
+import os, math
 import pickle
 from importlib import metadata
 
@@ -18,13 +18,16 @@ from rsl_rl.runners import OnPolicyRunner # type: ignore
 
 import genesis as gs
 
-from bike_env import StandingEnv
+# from bike_env_NonSteer_withGemini import StandingEnv
+from bike_env_NonSteer import StandingEnv
+from rslrl_cfg_bike_standing_nonSteering import PythonConfig
 
-file_num = 2200
+file_num = 400
+evv_cfg, _, _, _ = PythonConfig.get_cfgs()
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--exp_name", type=str, default="bike-standing")
+    parser.add_argument("-e", "--exp_name", type=str, default="bike-standing-better")
     parser.add_argument("--ckpt", type=int, default=file_num)
     args = parser.parse_args()
 
@@ -49,16 +52,19 @@ def main():
     policy = runner.get_inference_policy(device=gs.device)
 
     obs, _ = env.reset()
+    counter = 0
     with torch.no_grad():
         while True:
+            counter += 1
+            print("counter:", counter)
             actions = policy(obs)
             obs, rews, dones, infos = env.step(actions)
+            # print(torch.clip(actions, -env_cfg["clip_actions"], env_cfg["clip_actions"]))
+            print(math.degrees(obs[0][0]))
+            if(dones):
+                print("ouch!")
+                counter = 0
 
 
 if __name__ == "__main__":
     main()
-
-"""
-# evaluation
-python examples/locomotion/go2_eval.py -e go2-walking -v --ckpt 100
-"""
